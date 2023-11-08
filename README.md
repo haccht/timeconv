@@ -8,8 +8,8 @@ Usage:
   timeconv [Options]
 
 Application Options:
-  -i, --in=   Specify input format (default: Unix)
-  -o, --out=  Specify output format (default: RFC3339)
+  -i, --in=   Specify input time format (default: Unix)
+  -o, --out=  Specify output time format (default: RFC3339)
   -z, --tz=   Override timezone
   -h, --help  Show this help message
 
