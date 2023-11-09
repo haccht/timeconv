@@ -46,11 +46,7 @@ Format Examples:
 $ timeconv 1698292629.955
 2023-10-26T03:57:09Z
 
-$ echo 1698292629.955 | timeconv
-2023-10-26T03:57:09Z
-```
 
-```bash
 $ cat timeconvs.txt
 1698292629.955
 1698292630.057
@@ -65,13 +61,13 @@ $ cat timeconvs.txt | timeconv
 `timeconv` can translate from a specific time format to another format.
 
 ```bash
-$ timeconv -o '02 Jan 06 15:04 MST' -i RFC3339 2023-11-01T09:00:00Z
+$ echo 2023-11-01T09:00:00Z | timeconv -i RFC3339 -o '02 Jan 06 15:04 MST'
 01 Nov 23 09:00 UTC
 ```
 
 `timeconv` can also override the output timezone as well.
 
 ```bash
-$ timeconv -o '02 Jan 06 15:04 MST' -i RFC3339 -z Asia/Tokyo 2023-11-01T09:00:00Z
+$ echo 2023-11-01T09:00:00Z | timeconv -i RFC3339 -o '02 Jan 06 15:04 MST' -z Asia/Tokyo
 01 Nov 23 18:00 JST
 ```
