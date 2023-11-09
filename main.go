@@ -2,7 +2,7 @@ package main
 
 import (
 	"bufio"
-    "bytes"
+	"bytes"
 	"fmt"
 	"os"
 	"strconv"
@@ -123,7 +123,7 @@ func run() error {
 
 	args, err := parser.Parse()
 	if err != nil {
-		return err
+		os.Exit(1)
 	}
 
 	if opts.Help {
@@ -157,7 +157,7 @@ Format Examples:
   Arbitrary formats are also supported. See https://pkg.go.dev/time as a reference.`)
 
 		fmt.Println(message.String())
-        os.Exit(0)
+		os.Exit(0)
 	}
 
 	scanner := getScanner(args)
@@ -180,7 +180,7 @@ Format Examples:
 		fmt.Println(formatValue(opts.Out, t))
 	}
 
-    return scanner.Err()
+	return scanner.Err()
 }
 
 func main() {
