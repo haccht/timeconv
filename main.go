@@ -13,8 +13,10 @@ import (
 )
 
 type options struct {
-	In   string `short:"i" long:"in" description:"Specify input time format" default:"Unix"`
+	In   string `short:"i" long:"in" description:"Specify input time format" default:"RFC3339"`
 	Out  string `short:"o" long:"out" description:"Specify output time format" default:"RFC3339"`
+	Now  bool   `short:"n" long:"now" description:"Load currnet time as input"`
+	Add  string `short:"a" long:"add" description:"Append specified duration (ex. 5m, -1.5h, 1h30m)"`
 	Tz   string `short:"z" long:"tz" description:"Override timezone"`
 	Help bool   `short:"h" long:"help" description:"Show this help message"`
 }
@@ -49,14 +51,15 @@ func parseValue(format, value string) (time.Time, error) {
 			return time.Time{}, fmt.Errorf("failed to parse epoch time: %s", value)
 		}
 		return time.UnixMicro(int64(f)), nil
+	default:
+		return time.Parse(layout, value)
 	}
-
-	return time.Parse(layout, value)
 }
 
-func formatValue(format string, t time.Time) string {
+func formatValue(format string, t time.Time, d time.Duration, l *time.Location) string {
 	layout := loadLayout(format)
 
+	t = t.Add(d).In(l)
 	switch strings.ToLower(layout) {
 	case "unix":
 		f := float64(t.UnixNano()) / 1000000000
@@ -67,9 +70,9 @@ func formatValue(format string, t time.Time) string {
 	case "unix.micro":
 		f := float64(t.UnixNano()) / 1000
 		return strconv.FormatFloat(f, 'f', -1, 64)
+	default:
+		return t.Format(layout)
 	}
-
-	return t.Format(layout)
 }
 
 func loadLayout(format string) string {
@@ -160,27 +163,44 @@ Format Examples:
 		os.Exit(0)
 	}
 
-	scanner := getScanner(args)
-	for scanner.Scan() {
-		value := strings.TrimSpace(scanner.Text())
-
-		t, err := parseValue(opts.In, value)
+	dur := time.Duration(0)
+	if opts.Add != "" {
+		d, err := time.ParseDuration(opts.Add)
 		if err != nil {
 			return err
 		}
 
-		if opts.Tz != "" {
-			loc, err := time.LoadLocation(opts.Tz)
+		dur = d
+	}
+
+	loc := time.UTC
+	if opts.Tz != "" {
+		l, err := time.LoadLocation(opts.Tz)
+		if err != nil {
+			return err
+		}
+
+		loc = l
+	}
+
+	if opts.Now {
+		t := time.Now()
+		fmt.Println(formatValue(opts.Out, t, dur, loc))
+	} else {
+		scanner := getScanner(args)
+		for scanner.Scan() {
+			value := strings.TrimSpace(scanner.Text())
+			t, err := parseValue(opts.In, value)
 			if err != nil {
 				return err
 			}
-			t = t.In(loc)
-		}
 
-		fmt.Println(formatValue(opts.Out, t))
+			fmt.Println(formatValue(opts.Out, t, dur, loc))
+		}
+		return scanner.Err()
 	}
 
-	return scanner.Err()
+	return nil
 }
 
 func main() {
