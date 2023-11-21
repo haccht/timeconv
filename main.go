@@ -59,7 +59,11 @@ func parseValue(format, value string) (time.Time, error) {
 func formatValue(format string, t time.Time, d time.Duration, l *time.Location) string {
 	layout := loadLayout(format)
 
-	t = t.Add(d).In(l)
+	t = t.Add(d)
+    if l != nil {
+        t = t.In(l)
+    }
+
 	switch strings.ToLower(layout) {
 	case "unix":
 		f := float64(t.UnixNano()) / 1000000000
@@ -163,7 +167,7 @@ Format Examples:
 		os.Exit(0)
 	}
 
-	dur := time.Duration(0)
+	var dur time.Duration
 	if opts.Add != "" {
 		d, err := time.ParseDuration(opts.Add)
 		if err != nil {
@@ -173,7 +177,7 @@ Format Examples:
 		dur = d
 	}
 
-	loc := time.UTC
+	var loc *time.Location
 	if opts.Tz != "" {
 		l, err := time.LoadLocation(opts.Tz)
 		if err != nil {
