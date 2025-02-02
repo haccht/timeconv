@@ -16,7 +16,8 @@ type options struct {
 	In   string `short:"i" long:"in" description:"Specify input time format" default:"RFC3339"`
 	Out  string `short:"o" long:"out" description:"Specify output time format" default:"RFC3339"`
 	Now  bool   `short:"n" long:"now" description:"Load currnet time as input"`
-	Add  string `short:"a" long:"add" description:"Append specified duration (ex. 5m, -1.5h, 1h30m)"`
+	Add  string `short:"a" long:"add" description:"Append specified duration (ex. 5m, 1.5h, 1h30m)"`
+	Sub  string `short:"s" long:"sub" description:"Substract specified duration (ex. 5m, 1.5h, 1h30m)"`
 	Tz   string `short:"z" long:"tz" description:"Override timezone"`
 	Help bool   `short:"h" long:"help" description:"Show this help message"`
 }
@@ -56,13 +57,8 @@ func parseValue(format, value string) (time.Time, error) {
 	}
 }
 
-func formatValue(format string, t time.Time, d time.Duration, l *time.Location) string {
+func formatValue(format string, t time.Time, l *time.Location) string {
 	layout := loadLayout(format)
-
-	t = t.Add(d)
-    if l != nil {
-        t = t.In(l)
-    }
 
 	switch strings.ToLower(layout) {
 	case "unix":
@@ -122,6 +118,15 @@ func loadLayout(format string) string {
 	}
 }
 
+func parseDuration(d string) time.Duration {
+	u, err := time.ParseDuration(d)
+	if err != nil {
+		return 0
+	}
+
+	return u
+}
+
 func run() error {
 	var opts options
 
@@ -167,16 +172,6 @@ Format Examples:
 		os.Exit(0)
 	}
 
-	var dur time.Duration
-	if opts.Add != "" {
-		d, err := time.ParseDuration(opts.Add)
-		if err != nil {
-			return err
-		}
-
-		dur = d
-	}
-
 	var loc *time.Location
 	if opts.Tz != "" {
 		l, err := time.LoadLocation(opts.Tz)
@@ -189,7 +184,10 @@ Format Examples:
 
 	if opts.Now {
 		t := time.Now()
-		fmt.Println(formatValue(opts.Out, t, dur, loc))
+		t = t.Add(parseDuration(opts.Add))
+		t = t.Add(parseDuration(opts.Sub) * -1)
+
+		fmt.Println(formatValue(opts.Out, t, loc))
 	} else {
 		scanner := getScanner(args)
 		for scanner.Scan() {
@@ -199,7 +197,9 @@ Format Examples:
 				return err
 			}
 
-			fmt.Println(formatValue(opts.Out, t, dur, loc))
+			t = t.Add(parseDuration(opts.Add))
+			t = t.Add(parseDuration(opts.Sub) * -1)
+			fmt.Println(formatValue(opts.Out, t, loc))
 		}
 		return scanner.Err()
 	}

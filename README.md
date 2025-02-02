@@ -11,7 +11,8 @@ Application Options:
   -i, --in=   Specify input time format (default: RFC3339)
   -o, --out=  Specify output time format (default: RFC3339)
   -n, --now   Load currnet time as input
-  -a, --add=  Append specified duration (ex. 5m, -1.5h, 1h30m)
+  -a, --add=  Append specified duration (ex. 5m, 1.5h, 1h30m)
+  -s, --sub=  Substract specified duration (ex. 5m, 1.5h, 1h30m)
   -z, --tz=   Override timezone
   -h, --help  Show this help message
 
