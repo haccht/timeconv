@@ -57,7 +57,7 @@ func parseValue(format, value string) (time.Time, error) {
 	}
 }
 
-func formatValue(format string, t time.Time, l *time.Location) string {
+func formatValue(format string, t time.Time) string {
 	layout := loadLayout(format)
 
 	switch strings.ToLower(layout) {
@@ -172,7 +172,7 @@ Format Examples:
 		os.Exit(0)
 	}
 
-	var loc *time.Location
+	loc := time.Local
 	if opts.Tz != "" {
 		l, err := time.LoadLocation(opts.Tz)
 		if err != nil {
@@ -182,26 +182,31 @@ Format Examples:
 		loc = l
 	}
 
+	times := []time.Time{}
 	if opts.Now {
 		t := time.Now()
-		t = t.Add(parseDuration(opts.Add))
-		t = t.Add(parseDuration(opts.Sub) * -1)
-
-		fmt.Println(formatValue(opts.Out, t, loc))
+		times = append(times, t)
 	} else {
 		scanner := getScanner(args)
 		for scanner.Scan() {
-			value := strings.TrimSpace(scanner.Text())
-			t, err := parseValue(opts.In, value)
-			if err != nil {
-				return err
+			v := strings.TrimSpace(scanner.Text())
+			t, err := parseValue(opts.In, v)
+			if err == nil {
+				times = append(times, t)
 			}
-
-			t = t.Add(parseDuration(opts.Add))
-			t = t.Add(parseDuration(opts.Sub) * -1)
-			fmt.Println(formatValue(opts.Out, t, loc))
 		}
-		return scanner.Err()
+
+		if err := scanner.Err(); err != nil {
+			return scanner.Err()
+		}
+	}
+
+	for _, t := range times {
+		t = t.In(loc)
+		t = t.Add(parseDuration(opts.Add))
+		t = t.Add(parseDuration(opts.Sub) * -1)
+
+		fmt.Println(formatValue(opts.Out, t))
 	}
 
 	return nil
