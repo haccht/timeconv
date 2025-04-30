@@ -8,12 +8,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"regexp"
 
 	flags "github.com/jessevdk/go-flags"
 )
 
-const helpText = `
-Format Examples:
+const helpText = `Format Examples:
   ANSIC       "Mon Jan _2 15:04:05 2006"
   UnixDate    "Mon Jan _2 15:04:05 MST 2006"
   RubyDate    "Mon Jan 02 15:04:05 -0700 2006"
@@ -60,13 +60,28 @@ var layouts = map[string]string{
 }
 
 type options struct {
-	In   string `short:"i" long:"in" description:"Specify input time format" default:"RFC3339"`
-	Out  string `short:"o" long:"out" description:"Specify output time format" default:"RFC3339"`
+	In   string `short:"i" long:"in" description:"Specify input time format (default: guess format)"`
+	Out  string `short:"o" long:"out" description:"Specify output time format" default:"rfc3339"`
 	Now  bool   `short:"n" long:"now" description:"Load currnet time as input"`
 	Add  string `short:"a" long:"add" description:"Append specified duration (ex. 5m, 1.5h, 1h30m)"`
 	Sub  string `short:"s" long:"sub" description:"Substract specified duration (ex. 5m, 1.5h, 1h30m)"`
 	Tz   string `short:"z" long:"tz" description:"Override timezone"`
 	Help bool   `short:"h" long:"help" description:"Show this help message"`
+}
+
+
+type guessRule struct {
+	re *regexp.Regexp
+	layouts []string
+}
+
+var guessRules = []guessRule{
+	{regexp.MustCompile(`^\d{10,19}$`), []string{"unix", "unix-milli", "unix-micro"}},
+	{regexp.MustCompile(`^\d{4}`), []string{"rfc3339", "rfc3339nano", "datetime", "dateonly"}},
+	{regexp.MustCompile(`[A-Za-z]{3,4}|[+-]\d{4}`), []string{"unixdate", "rubydate", "rfc822", "rfc822z", "rfc850", "rfc1123", "rfc1123z", "rfc3339", "rfc3339nano"}},
+	{regexp.MustCompile(`^[A-Za-z]{3},?`), []string{"ansic", "unixdate", "rubydate", "rfc822", "rfc822z", "rfc850", "rfc1123", "rfc1123z", "stamp", "stampmilli", "stampmicro", "stampnano"}},
+	{regexp.MustCompile(`\d{2}:\d{2}:\d{2}`), []string{"datetime", "timeonly", "ansic", "unixdate", "rubydate", "rfc850", "rfc1123", "rfc1123z"}},
+	{regexp.MustCompile(`\d{1,2}:\d{2}(AM|PM)`), []string{"kitchen"}},
 }
 
 func getScanner(args []string) *bufio.Scanner {
@@ -77,43 +92,57 @@ func getScanner(args []string) *bufio.Scanner {
 	return bufio.NewScanner(os.Stdin)
 }
 
-func parseValue(v, format string) (time.Time, error) {
-	layout, ok := layouts[format]
-	if ok {
-		return time.Parse(layout, v)
+func guessTime(s string) (time.Time, error) {
+	for _, rule := range guessRules {
+		if rule.re.MatchString(s) {
+			for _, l := range rule.layouts {
+				if t, err := toTime(s, l); err == nil {
+					return t, nil
+				}
+			}
+		}
+	}
+	return time.Time{}, fmt.Errorf("Unknown format: %s", s)
+}
+
+func toTime(s, format string) (time.Time, error) {
+	if format == "" {
+		return guessTime(s)
+	}
+	if layout, ok := layouts[format]; ok {
+		return time.Parse(layout, s)
 	}
 
-	switch layout {
+	switch format {
 	case "unix":
-		f, err := strconv.ParseFloat(v, 64)
+		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
-			return time.Time{}, fmt.Errorf("failed to parse epoch time: %s", v)
+			return time.Time{}, fmt.Errorf("failed to parse epoch time: %s", s)
 		}
 		return time.UnixMicro(int64(f * 1000000)), nil
 	case "unix.milli":
-		f, err := strconv.ParseFloat(v, 64)
+		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
-			return time.Time{}, fmt.Errorf("failed to parse epoch time: %s", v)
+			return time.Time{}, fmt.Errorf("failed to parse epoch time: %s", s)
 		}
 		return time.UnixMicro(int64(f * 1000)), nil
 	case "unix.micro":
-		f, err := strconv.ParseFloat(v, 64)
+		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
-			return time.Time{}, fmt.Errorf("failed to parse epoch time: %s", v)
+			return time.Time{}, fmt.Errorf("failed to parse epoch time: %s", s)
 		}
 		return time.UnixMicro(int64(f)), nil
 	default:
-		return time.Time{}, fmt.Errorf("failed to parse time: %s", v)
+		return time.Time{}, fmt.Errorf("failed to parse time: %s", s)
 	}
 }
 
-func formatValue(t time.Time, format string) string {
-	layout, ok := layouts[format]
-	if ok {
+func toString(t time.Time, format string) string {
+	if layout, ok := layouts[format]; ok {
 		return t.Format(layout)
 	}
 
-	switch layout {
+	switch format {
 	case "unix":
 		f := float64(t.UnixNano()) / 1000000000
 		return strconv.FormatFloat(f, 'f', -1, 64)
@@ -139,7 +168,6 @@ func parseDuration(d string) time.Duration {
 
 func run() error {
 	var opts options
-
 	parser := flags.NewParser(&opts, flags.Default&^flags.HelpFlag)
 	parser.Usage = "[Options]"
 
@@ -147,7 +175,6 @@ func run() error {
 	if err != nil {
 		os.Exit(1)
 	}
-
 	if opts.Help {
 		var message bytes.Buffer
 
@@ -177,7 +204,7 @@ func run() error {
 		t = t.Add(parseDuration(opts.Add))
 		t = t.Add(parseDuration(opts.Sub) * -1)
 		t = t.In(loc)
-		fmt.Println(formatValue(t, opts.Out))
+		fmt.Println(toString(t, opts.Out))
 	} else {
 		scanner := getScanner(args)
 		w := bufio.NewWriter(os.Stdout)
@@ -185,7 +212,7 @@ func run() error {
 
 		for scanner.Scan() {
 			v := strings.TrimSpace(scanner.Text())
-			t, err := parseValue(v, opts.In)
+			t, err := toTime(v, opts.In)
 			if err != nil {
 				return err
 			}
@@ -193,7 +220,7 @@ func run() error {
 			t = t.Add(parseDuration(opts.Add))
 			t = t.Add(parseDuration(opts.Sub) * -1)
 			t = t.In(loc)
-			fmt.Println(formatValue(t, opts.Out))
+			fmt.Println(toString(t, opts.Out))
 		}
 
 		if err := scanner.Err(); err != nil {

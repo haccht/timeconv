@@ -8,14 +8,13 @@ Usage:
   timeconv [Options]
 
 Application Options:
-  -i, --in=   Specify input time format (default: RFC3339)
-  -o, --out=  Specify output time format (default: RFC3339)
+  -i, --in=   Specify input time format (default: guess format)
+  -o, --out=  Specify output time format (default: rfc3339)
   -n, --now   Load currnet time as input
   -a, --add=  Append specified duration (ex. 5m, 1.5h, 1h30m)
   -s, --sub=  Substract specified duration (ex. 5m, 1.5h, 1h30m)
   -z, --tz=   Override timezone
   -h, --help  Show this help message
-
 Format Examples:
   ANSIC       "Mon Jan _2 15:04:05 2006"
   UnixDate    "Mon Jan _2 15:04:05 MST 2006"
@@ -64,13 +63,13 @@ $ cat timeconvs.txt | timeconv --in unix
 `timeconv` can translate from a specific time format to another format.
 
 ```bash
-$ echo 2023-11-01T09:00:00Z | timeconv --in RFC3339 --out '02 Jan 06 15:04 MST'
+$ echo 2023-11-01T09:00:00Z | timeconv --in rfc3339 --out '02 Jan 06 15:04 MST'
 01 Nov 23 09:00 UTC
 ```
 
 `timeconv` can also override the output timezone as well.
 
 ```bash
-$ echo 2023-11-01T09:00:00Z | timeconv --i RFC3339 --out '02 Jan 06 15:04 MST' --tz Asia/Tokyo
+$ echo 2023-11-01T09:00:00Z | timeconv --i rfc3339 --out '02 Jan 06 15:04 MST' --tz Asia/Tokyo
 01 Nov 23 18:00 JST
 ```
