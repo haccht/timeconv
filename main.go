@@ -92,8 +92,7 @@ func genScanner(args []string) *bufio.Scanner {
 	return bufio.NewScanner(os.Stdin)
 }
 
-func stringToTime(s, f string) (time.Time, error) {
-	format := strings.ToLower(f)
+func stringToTime(s, format string) (time.Time, error) {
 	if format == "" {
 		return guessTime(s)
 	}
@@ -125,8 +124,7 @@ func stringToTime(s, f string) (time.Time, error) {
 	}
 }
 
-func timeToString(t time.Time, f string) string {
-	format := strings.ToLower(f)
+func timeToString(t time.Time, format string) string {
 	if layout, ok := layouts[format]; ok {
 		return t.Format(layout)
 	}
@@ -142,7 +140,8 @@ func timeToString(t time.Time, f string) string {
 		f := float64(t.UnixNano()) / 1000
 		return strconv.FormatFloat(f, 'f', -1, 64)
 	default:
-		return format
+		return t.Format(format)
+
 	}
 }
 
@@ -180,7 +179,7 @@ func run() error {
 	parser.Usage = "[Options]"
 	args, err := parser.Parse()
 	if err != nil {
-		os.Exit(1)
+		return err
 	}
 
 	if opts.Help {
@@ -192,6 +191,8 @@ func run() error {
 		os.Exit(0)
 	}
 
+	in := strings.ToLower(opts.In)
+	out := strings.ToLower(opts.Out)
 	add := parseDuration(opts.Add)
 	sub := parseDuration(opts.Sub)
 
@@ -216,28 +217,28 @@ func run() error {
 	if opts.Now {
 		t := time.Now()
 		t = modifyTime(t, loc, add, sub)
-		fmt.Println(timeToString(t, opts.Out))
+		fmt.Println(timeToString(t, out))
 	} else {
 		scanner := genScanner(args)
 		for scanner.Scan() {
 			line := scanner.Text()
 			if opts.Pattern == "" {
-				t, err := stringToTime(strings.TrimSpace(line), opts.In)
+				t, err := stringToTime(strings.TrimSpace(line), in)
 				if err != nil {
 					return err
 				}
 
 				t = modifyTime(t, loc, add, sub)
-				fmt.Println(timeToString(t, opts.Out))
+				fmt.Println(timeToString(t, out))
 			} else {
 				replaced := pat.ReplaceAllStringFunc(line, func(s string) string {
-					t, err := stringToTime(s, opts.In)
+					t, err := stringToTime(s, in)
 					if err != nil {
 						return s
 					}
 
 					t = modifyTime(t, loc, add, sub)
-					return timeToString(t, opts.Out)
+					return timeToString(t, out)
 				})
 				fmt.Println(replaced)
 			}
