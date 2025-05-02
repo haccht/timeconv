@@ -13,8 +13,10 @@ Application Options:
   -n, --now   Load currnet time as input
   -a, --add=  Append specified duration (ex. 5m, 1.5h, 1h30m)
   -s, --sub=  Substract specified duration (ex. 5m, 1.5h, 1h30m)
-  -z, --tz=   Override timezone
+  -z, --loc=  Override timezone
+  -g, --grep= Replace strings that match the regular expression
   -h, --help  Show this help message
+
 Format Examples:
   ANSIC       "Mon Jan _2 15:04:05 2006"
   UnixDate    "Mon Jan _2 15:04:05 MST 2006"
@@ -48,7 +50,6 @@ Format Examples:
 $ timeconv --in unix 1698292629.955
 2023-10-26T03:57:09Z
 
-
 $ cat timeconvs.txt
 1698292629.955
 1698292630.057
@@ -70,6 +71,6 @@ $ echo 2023-11-01T09:00:00Z | timeconv --in rfc3339 --out '02 Jan 06 15:04 MST'
 `timeconv` can also override the output timezone as well.
 
 ```bash
-$ echo 2023-11-01T09:00:00Z | timeconv --i rfc3339 --out '02 Jan 06 15:04 MST' --tz Asia/Tokyo
+$ echo 2023-11-01T09:00:00Z | timeconv --i rfc3339 --out '02 Jan 06 15:04 MST' --loc Asia/Tokyo
 01 Nov 23 18:00 JST
 ```

@@ -185,7 +185,7 @@ func run() error {
 	if opts.Help {
 		var message bytes.Buffer
 		parser.WriteHelp(&message)
-		fmt.Fprint(&message, "")
+		fmt.Fprint(&message, "\n")
 		fmt.Fprint(&message, helpText)
 		fmt.Fprintln(os.Stdout, message.String())
 		os.Exit(0)
