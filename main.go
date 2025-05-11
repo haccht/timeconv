@@ -59,15 +59,21 @@ var layouts = map[string]string{
 	"timeonly":    time.TimeOnly,
 }
 
+var epochLayouts = map[string]int64{
+	"unix":       1e6,
+	"unix-milli": 1e3,
+	"unix-micro": 1,
+}
+
 type options struct {
-	In      string    `short:"i" long:"in" description:"Specify input time format (default: guess format)"`
-	Out     string    `short:"o" long:"out" description:"Specify output time format" default:"rfc3339"`
-	Now     bool      `short:"n" long:"now" description:"Load currnet time as input"`
-	Add     string    `short:"a" long:"add" description:"Append specified duration (ex. 5m, 1.5h, 1h30m)"`
-	Sub     string    `short:"s" long:"sub" description:"Substract specified duration (ex. 5m, 1.5h, 1h30m)"`
-	Loc      string `short:"z" long:"loc" description:"Override timezone"`
-	Pattern string   `short:"g" long:"grep" description:"Replace strings that match the regular expression"`
-	Help    bool      `short:"h" long:"help" description:"Show this help message"`
+	In      string `short:"i" long:"in" description:"Specify input time format (default: guess format)"`
+	Out     string `short:"o" long:"out" description:"Specify output time format" default:"rfc3339"`
+	Now     bool   `short:"n" long:"now" description:"Load currnet time as input"`
+	Add     string `short:"a" long:"add" description:"Append specified duration (ex. 5m, 1.5h, 1h30m)"`
+	Sub     string `short:"s" long:"sub" description:"Substract specified duration (ex. 5m, 1.5h, 1h30m)"`
+	Loc     string `short:"z" long:"loc" description:"Override timezone"`
+	Pattern string `short:"g" long:"grep" description:"Replace strings that match the regular expression"`
+	Help    bool   `short:"h" long:"help" description:"Show this help message"`
 }
 
 type guessRule struct {
@@ -96,32 +102,20 @@ func stringToTime(s, format string) (time.Time, error) {
 	if format == "" {
 		return guessTime(s)
 	}
+
 	if layout, ok := layouts[format]; ok {
 		return time.Parse(layout, s)
 	}
 
-	switch format {
-	case "unix":
-		f, err := strconv.ParseFloat(s, 64)
+	if scale, ok := epochLayouts[strings.ToLower(format)]; ok {
+		v, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			return time.Time{}, fmt.Errorf("failed to parse epoch time: %s", s)
 		}
-		return time.UnixMicro(int64(f * 1000000)), nil
-	case "unix-milli":
-		f, err := strconv.ParseFloat(s, 64)
-		if err != nil {
-			return time.Time{}, fmt.Errorf("failed to parse epoch time: %s", s)
-		}
-		return time.UnixMicro(int64(f * 1000)), nil
-	case "unix-micro":
-		f, err := strconv.ParseFloat(s, 64)
-		if err != nil {
-			return time.Time{}, fmt.Errorf("failed to parse epoch time: %s", s)
-		}
-		return time.UnixMicro(int64(f)), nil
-	default:
-		return time.Time{}, fmt.Errorf("failed to parse time: %s", s)
+		return time.UnixMicro(int64(v * float64(scale))), nil
 	}
+
+	return time.Time{}, fmt.Errorf("failed to parse time: %s", s)
 }
 
 func timeToString(t time.Time, format string) string {
@@ -129,20 +123,12 @@ func timeToString(t time.Time, format string) string {
 		return t.Format(layout)
 	}
 
-	switch format {
-	case "unix":
-		f := float64(t.UnixNano()) / 1000000000
-		return strconv.FormatFloat(f, 'f', -1, 64)
-	case "unix-milli":
-		f := float64(t.UnixNano()) / 1000000
-		return strconv.FormatFloat(f, 'f', -1, 64)
-	case "unix-micro":
-		f := float64(t.UnixNano()) / 1000
-		return strconv.FormatFloat(f, 'f', -1, 64)
-	default:
-		return t.Format(format)
-
+	if scale, ok := epochLayouts[strings.ToLower(format)]; ok {
+		v := float64(t.UnixMicro())
+		return strconv.FormatFloat(v/float64(scale), 'f', -1, 64)
 	}
+
+	return t.Format(format)
 }
 
 func guessTime(s string) (time.Time, error) {
