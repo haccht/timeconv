@@ -107,7 +107,7 @@ func stringToTime(s, format string) (time.Time, error) {
 		return time.Parse(layout, s)
 	}
 
-	if scale, ok := epochLayouts[strings.ToLower(format)]; ok {
+	if scale, ok := epochLayouts[format]; ok {
 		v, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			return time.Time{}, fmt.Errorf("failed to parse epoch time: %s", s)
@@ -123,7 +123,7 @@ func timeToString(t time.Time, format string) string {
 		return t.Format(layout)
 	}
 
-	if scale, ok := epochLayouts[strings.ToLower(format)]; ok {
+	if scale, ok := epochLayouts[format]; ok {
 		v := float64(t.UnixMicro())
 		return strconv.FormatFloat(v/float64(scale), 'f', -1, 64)
 	}
