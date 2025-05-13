@@ -182,20 +182,20 @@ type locationValue struct {
 	*time.Location
 }
 
-func (l *locationValue) String() string {
-	return l.Location.String()
+func (lv *locationValue) String() string {
+	return lv.Location.String()
 }
 
-func (l *locationValue) Set(value string) error {
+func (lv *locationValue) Set(value string) error {
 	loc, err := time.LoadLocation(value)
 	if err != nil {
 		return fmt.Errorf("invalid location %q: %w", value, err)
 	}
-	l.Location = loc
+	lv.Location = loc
 	return nil
 }
 
-func (l *locationValue) Type() string {
+func (lv *locationValue) Type() string {
 	return "location"
 }
 
@@ -203,25 +203,25 @@ type regexpValue struct {
 	*regexp.Regexp
 }
 
-func (r *regexpValue) String() string {
-	if r.Regexp == nil {
+func (rv *regexpValue) String() string {
+	if rv.Regexp == nil {
 		return ""
 	}
-	return r.Regexp.String()
+	return rv.Regexp.String()
 }
 
-func (r *regexpValue) Set(s string) error {
+func (rv *regexpValue) Set(s string) error {
 	if s == "" {
 		re, err := regexp.Compile(s)
 		if err != nil {
 			return err
 		}
-		r.Regexp = re
+		rv.Regexp = re
 	}
 	return nil
 }
 
-func (r *regexpValue) Type() string {
+func (rv *regexpValue) Type() string {
 	return "regexp"
 }
 
