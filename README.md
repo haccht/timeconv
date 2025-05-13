@@ -5,17 +5,16 @@
 ```bash
 $ timeconv -h
 Usage:
-  timeconv [Options]
+  timeconv [Options] [file...]
 
-Application Options:
-  -i, --in=   Specify input time format (default: guess format)
-  -o, --out=  Specify output time format (default: rfc3339)
-  -n, --now   Load currnet time as input
-  -a, --add=  Append specified duration (ex. 5m, 1.5h, 1h30m)
-  -s, --sub=  Substract specified duration (ex. 5m, 1.5h, 1h30m)
-  -z, --loc=  Override timezone
-  -g, --grep= Replace strings that match the regular expression
-  -h, --help  Show this help message
+Options:
+  -i, --in string           Input time format (default: auto)
+  -o, --out string          Output time format (default "rfc3339")
+  -n, --now                 Load current time as input
+  -a, --add duration        Append time duration (ex. 5m, 1.5h, 1h30m)
+  -s, --sub duration        Substruct time duration (ex. 5m, 1.5h, 1h30m)
+  -l, --location location   Timezone location (e.g., UTC, Asia/Tokyo) (default Local)
+  -g, --grep regexp         Replace strings that match the regular expression
 
 Format Examples:
   ANSIC       "Mon Jan _2 15:04:05 2006"

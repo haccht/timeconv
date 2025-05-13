@@ -2,19 +2,18 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	flags "github.com/jessevdk/go-flags"
+	"github.com/spf13/pflag"
 )
 
-const helpText = `Format Examples:
-  ANSIC       "Mon Jan _2 15:04:05 2006"
+const layoutExamples = `  ANSIC       "Mon Jan _2 15:04:05 2006"
   UnixDate    "Mon Jan _2 15:04:05 MST 2006"
   RubyDate    "Mon Jan 02 15:04:05 -0700 2006"
   RFC822      "02 Jan 06 15:04 MST"
@@ -38,7 +37,7 @@ const helpText = `Format Examples:
 
   Arbitrary formats are also supported. See https://pkg.go.dev/time as a reference.`
 
-var layouts = map[string]string{
+var knownLayouts = map[string]string{
 	"ansic":       time.ANSIC,
 	"unixdate":    time.UnixDate,
 	"rubydate":    time.RubyDate,
@@ -65,17 +64,6 @@ var epochLayouts = map[string]int64{
 	"unix-micro": 1,
 }
 
-type options struct {
-	In      string `short:"i" long:"in" description:"Specify input time format (default: guess format)"`
-	Out     string `short:"o" long:"out" description:"Specify output time format" default:"rfc3339"`
-	Now     bool   `short:"n" long:"now" description:"Load currnet time as input"`
-	Add     string `short:"a" long:"add" description:"Append specified duration (ex. 5m, 1.5h, 1h30m)"`
-	Sub     string `short:"s" long:"sub" description:"Substract specified duration (ex. 5m, 1.5h, 1h30m)"`
-	Loc     string `short:"z" long:"loc" description:"Override timezone"`
-	Pattern string `short:"g" long:"grep" description:"Replace strings that match the regular expression"`
-	Help    bool   `short:"h" long:"help" description:"Show this help message"`
-}
-
 type guessRule struct {
 	re      *regexp.Regexp
 	layouts []string
@@ -90,21 +78,50 @@ var guessRules = []guessRule{
 	{regexp.MustCompile(`\d{1,2}:\d{2}(AM|PM)`), []string{"kitchen"}},
 }
 
-func genScanner(args []string) *bufio.Scanner {
-	if len(args) > 0 {
-		reader := strings.NewReader(strings.Join(args, "\n"))
-		return bufio.NewScanner(reader)
+type options struct {
+	in     string
+	out    string
+	now    bool
+	add    time.Duration
+	sub    time.Duration
+	loc    locationValue
+	re     regexpValue
+	inputs []string
+}
+
+func parseFlags() *options {
+	var opts options
+	opts.loc.Location = time.Local
+
+	pflag.StringVarP(&opts.in, "in", "i", "", "Input time format (default: auto)")
+	pflag.StringVarP(&opts.out, "out", "o", "rfc3339", "Output time format")
+	pflag.BoolVarP(&opts.now, "now", "n", false, "Load current time as input")
+	pflag.DurationVarP(&opts.add, "add", "a", time.Duration(0), "Append time duration (ex. 5m, 1.5h, 1h30m)")
+	pflag.DurationVarP(&opts.sub, "sub", "s", time.Duration(0), "Substruct time duration (ex. 5m, 1.5h, 1h30m)")
+	pflag.VarP(&opts.loc, "location", "l", "Timezone location (e.g., UTC, Asia/Tokyo)")
+	pflag.VarP(&opts.re, "grep", "g", "Replace strings that match the regular expression")
+	pflag.CommandLine.SortFlags = false
+	pflag.Usage = func() {
+		fmt.Fprintln(os.Stderr, "Usage:")
+		fmt.Fprintf(os.Stderr, "  %s [Options] [file...]\n\n", filepath.Base(os.Args[0]))
+		fmt.Fprintln(os.Stderr, "Options:")
+		fmt.Fprintf(os.Stderr, "%s\n", pflag.CommandLine.FlagUsages())
+		fmt.Fprintln(os.Stderr, "Format Examples:")
+		fmt.Fprintf(os.Stderr, "%s\n", layoutExamples)
+		os.Exit(0)
 	}
-	return bufio.NewScanner(os.Stdin)
+
+	pflag.Parse()
+
+	opts.inputs = pflag.Args()
+	opts.in = strings.ToLower(opts.in)
+	opts.out = strings.ToLower(opts.out)
+	return &opts
 }
 
 func stringToTime(s, format string) (time.Time, error) {
 	if format == "" {
 		return guessTime(s)
-	}
-
-	if layout, ok := layouts[format]; ok {
-		return time.Parse(layout, s)
 	}
 
 	if scale, ok := epochLayouts[format]; ok {
@@ -115,19 +132,21 @@ func stringToTime(s, format string) (time.Time, error) {
 		return time.UnixMicro(int64(v * float64(scale))), nil
 	}
 
+	if layout, ok := knownLayouts[format]; ok {
+		return time.Parse(layout, s)
+	}
 	return time.Time{}, fmt.Errorf("failed to parse time: %s", s)
 }
 
 func timeToString(t time.Time, format string) string {
-	if layout, ok := layouts[format]; ok {
-		return t.Format(layout)
-	}
-
 	if scale, ok := epochLayouts[format]; ok {
 		v := float64(t.UnixMicro())
 		return strconv.FormatFloat(v/float64(scale), 'f', -1, 64)
 	}
 
+	if layout, ok := knownLayouts[format]; ok {
+		return t.Format(layout)
+	}
 	return t.Format(format)
 }
 
@@ -144,87 +163,96 @@ func guessTime(s string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("Unknown format: %s", s)
 }
 
-func modifyTime(t time.Time, loc *time.Location, add, sub time.Duration) time.Time {
-	t = t.In(loc)
+func genScanner(args []string) *bufio.Scanner {
+	if len(args) > 0 {
+		reader := strings.NewReader(strings.Join(args, "\n"))
+		return bufio.NewScanner(reader)
+	}
+	return bufio.NewScanner(os.Stdin)
+}
+
+func modifyTime(t time.Time, loc locationValue, add, sub time.Duration) time.Time {
+	t = t.In(loc.Location)
 	t = t.Add(add)
 	t = t.Add(sub * -1)
 	return t
 }
 
-func parseDuration(d string) time.Duration {
-	u, err := time.ParseDuration(d)
+type locationValue struct {
+	*time.Location
+}
+
+func (l *locationValue) String() string {
+	return l.Location.String()
+}
+
+func (l *locationValue) Set(value string) error {
+	loc, err := time.LoadLocation(value)
 	if err != nil {
-		return 0
+		return fmt.Errorf("invalid location %q: %w", value, err)
 	}
-	return u
+	l.Location = loc
+	return nil
+}
+
+func (l *locationValue) Type() string {
+	return "location"
+}
+
+type regexpValue struct {
+	*regexp.Regexp
+}
+
+func (r *regexpValue) String() string {
+	if r.Regexp == nil {
+		return ""
+	}
+	return r.Regexp.String()
+}
+
+func (r *regexpValue) Set(s string) error {
+	if s == "" {
+		re, err := regexp.Compile(s)
+		if err != nil {
+			return err
+		}
+		r.Regexp = re
+	}
+	return nil
+}
+
+func (r *regexpValue) Type() string {
+	return "regexp"
 }
 
 func run() error {
-	var opts options
-	parser := flags.NewParser(&opts, flags.Default&^flags.HelpFlag)
-	parser.Usage = "[Options]"
-	args, err := parser.Parse()
-	if err != nil {
-		return err
-	}
+	opts := parseFlags()
 
-	if opts.Help {
-		var message bytes.Buffer
-		parser.WriteHelp(&message)
-		fmt.Fprint(&message, "\n")
-		fmt.Fprint(&message, helpText)
-		fmt.Fprintln(os.Stdout, message.String())
-		os.Exit(0)
-	}
-
-	in := strings.ToLower(opts.In)
-	out := strings.ToLower(opts.Out)
-	add := parseDuration(opts.Add)
-	sub := parseDuration(opts.Sub)
-
-	loc := time.Local
-	if opts.Loc != "" {
-		if v, err := time.LoadLocation(opts.Loc); err != nil {
-			return err
-		} else {
-			loc = v
-		}
-	}
-
-	var pat *regexp.Regexp
-	if opts.Pattern != "" {
-		if v, err := regexp.Compile(opts.Pattern); err != nil {
-			return err
-		} else {
-			pat = v
-		}
-	}
-
-	if opts.Now {
+	if opts.now {
 		t := time.Now()
-		t = modifyTime(t, loc, add, sub)
-		fmt.Println(timeToString(t, out))
+		t = modifyTime(t, opts.loc, opts.add, opts.sub)
+		fmt.Println(timeToString(t, opts.out))
 	} else {
-		scanner := genScanner(args)
+		scanner := genScanner(opts.inputs)
 		for scanner.Scan() {
 			line := scanner.Text()
-			if opts.Pattern == "" {
-				t, err := stringToTime(strings.TrimSpace(line), in)
+			if opts.re.Regexp == nil {
+				t, err := stringToTime(strings.TrimSpace(line), opts.in)
 				if err != nil {
 					return err
 				}
 
-				t = modifyTime(t, loc, add, sub)
-				fmt.Println(timeToString(t, out))
+				t = modifyTime(t, opts.loc, opts.add, opts.sub)
+				fmt.Println(timeToString(t, opts.out))
 			} else {
-				replaced := pat.ReplaceAllStringFunc(line, func(s string) string {
-					t, err := stringToTime(s, in)
+				replaced := opts.re.ReplaceAllStringFunc(line, func(s string) string {
+					t, err := stringToTime(s, opts.in)
 					if err != nil {
 						return s
 					}
 
-					t = modifyTime(t, loc, add, sub)
-					return timeToString(t, out)
+					t = modifyTime(t, opts.loc, opts.add, opts.sub)
+					return timeToString(t, opts.out)
 				})
 				fmt.Println(replaced)
 			}
