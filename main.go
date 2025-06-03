@@ -98,7 +98,7 @@ func parseFlags() *options {
 	pflag.BoolVarP(&opts.now, "now", "n", false, "Load current time as input")
 	pflag.DurationVarP(&opts.add, "add", "a", time.Duration(0), "Append time duration (ex. 5m, 1.5h, 1h30m)")
 	pflag.DurationVarP(&opts.sub, "sub", "s", time.Duration(0), "Substruct time duration (ex. 5m, 1.5h, 1h30m)")
-	pflag.VarP(&opts.loc, "location", "l", "Timezone location (e.g., UTC, Asia/Tokyo)")
+	pflag.VarP(&opts.loc, "loc", "l", "Timezone location (e.g., UTC, Asia/Tokyo)")
 	pflag.VarP(&opts.re, "grep", "g", "Replace strings that match the regular expression")
 	pflag.CommandLine.SortFlags = false
 	pflag.Usage = func() {
@@ -114,17 +114,16 @@ func parseFlags() *options {
 	pflag.Parse()
 
 	opts.inputs = pflag.Args()
-	opts.in = strings.ToLower(opts.in)
-	opts.out = strings.ToLower(opts.out)
 	return &opts
 }
 
 func stringToTime(s, format string) (time.Time, error) {
-	if format == "" {
+	lformat := strings.ToLower(format)
+	if lformat == "" {
 		return guessTime(s)
 	}
 
-	if scale, ok := epochLayouts[format]; ok {
+	if scale, ok := epochLayouts[lformat]; ok {
 		v, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			return time.Time{}, fmt.Errorf("failed to parse epoch time: %s", s)
@@ -132,19 +131,20 @@ func stringToTime(s, format string) (time.Time, error) {
 		return time.UnixMicro(int64(v * float64(scale))), nil
 	}
 
-	if layout, ok := knownLayouts[format]; ok {
+	if layout, ok := knownLayouts[lformat]; ok {
 		return time.Parse(layout, s)
 	}
 	return time.Time{}, fmt.Errorf("failed to parse time: %s", s)
 }
 
 func timeToString(t time.Time, format string) string {
-	if scale, ok := epochLayouts[format]; ok {
+	lformat := strings.ToLower(format)
+	if scale, ok := epochLayouts[lformat]; ok {
 		v := float64(t.UnixMicro())
 		return strconv.FormatFloat(v/float64(scale), 'f', -1, 64)
 	}
 
-	if layout, ok := knownLayouts[format]; ok {
+	if layout, ok := knownLayouts[lformat]; ok {
 		return t.Format(layout)
 	}
 	return t.Format(format)
@@ -183,13 +183,16 @@ type locationValue struct {
 }
 
 func (lv *locationValue) String() string {
+	if lv.Location == nil {
+		return ""
+	}
 	return lv.Location.String()
 }
 
 func (lv *locationValue) Set(value string) error {
 	loc, err := time.LoadLocation(value)
 	if err != nil {
-		return fmt.Errorf("invalid location %q: %w", value, err)
+		return err
 	}
 	lv.Location = loc
 	return nil
@@ -210,14 +213,12 @@ func (rv *regexpValue) String() string {
 	return rv.Regexp.String()
 }
 
-func (rv *regexpValue) Set(s string) error {
-	if s == "" {
-		re, err := regexp.Compile(s)
-		if err != nil {
-			return err
-		}
-		rv.Regexp = re
+func (rv *regexpValue) Set(value string) error {
+	re, err := regexp.Compile(value)
+	if err != nil {
+		return err
 	}
+	rv.Regexp = re
 	return nil
 }
 
