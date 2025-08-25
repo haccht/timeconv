@@ -226,6 +226,15 @@ func (rv *regexpValue) Type() string {
 	return "regexp"
 }
 
+func processTimeString(s string, opts *options) (string, error) {
+	t, err := stringToTime(s, opts.in)
+	if err != nil {
+		return "", err
+	}
+	t = modifyTime(t, opts.loc, opts.add, opts.sub)
+	return timeToString(t, opts.out), nil
+}
+
 func run() error {
 	opts := parseFlags()
 
@@ -233,38 +242,37 @@ func run() error {
 		t := time.Now()
 		t = modifyTime(t, opts.loc, opts.add, opts.sub)
 		fmt.Println(timeToString(t, opts.out))
-	} else {
-		scanner := genScanner(opts.inputs)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if opts.re.Regexp == nil {
-				t, err := stringToTime(strings.TrimSpace(line), opts.in)
-				if err != nil {
-					return err
-				}
+		return nil
+	}
 
-				t = modifyTime(t, opts.loc, opts.add, opts.sub)
-				fmt.Println(timeToString(t, opts.out))
-			} else {
-				replaced := opts.re.ReplaceAllStringFunc(line, func(s string) string {
-					t, err := stringToTime(s, opts.in)
-					if err != nil {
-						return s
-					}
-
-					t = modifyTime(t, opts.loc, opts.add, opts.sub)
-					return timeToString(t, opts.out)
-				})
-				fmt.Println(replaced)
+	scanner := genScanner(opts.inputs)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if opts.re.Regexp == nil {
+			s := strings.TrimSpace(line)
+			out, err := processTimeString(s, opts)
+			if err != nil {
+				// To prevent stopping on a single malformed line,
+				// output the error to stderr and continue processing.
+				fmt.Fprintln(os.Stderr, err.Error())
+				continue
 			}
-		}
-
-		if err := scanner.Err(); err != nil {
-			return scanner.Err()
+			fmt.Println(out)
+		} else {
+			replaced := opts.re.ReplaceAllStringFunc(line, func(s string) string {
+				out, err := processTimeString(s, opts)
+				if err != nil {
+					// For --grep, if a substring fails to parse,
+					// return it unmodified instead of failing.
+					return s
+				}
+				return out
+			})
+			fmt.Println(replaced)
 		}
 	}
 
-	return nil
+	return scanner.Err()
 }
 
 func main() {
