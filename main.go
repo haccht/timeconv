@@ -134,7 +134,7 @@ func stringToTime(s, format string) (time.Time, error) {
 	if layout, ok := knownLayouts[lformat]; ok {
 		return time.Parse(layout, s)
 	}
-	return time.Time{}, fmt.Errorf("failed to parse time: %s", s)
+	return time.Parse(format, s)
 }
 
 func timeToString(t time.Time, format string) string {
