@@ -173,6 +173,17 @@ func genScanner(args []string) *bufio.Scanner {
 
 func modifyTime(t time.Time, loc locationValue, add, sub time.Duration) time.Time {
 	t = t.In(loc.Location)
+	if t.Year() == 0 {
+		t = time.Date(
+			time.Now().Year(),
+			t.Month(), t.Day(),
+			t.Hour(),
+			t.Minute(),
+			t.Second(),
+			t.Nanosecond(),
+			t.Location())
+	}
+
 	t = t.Add(add)
 	t = t.Add(sub * -1)
 	return t
