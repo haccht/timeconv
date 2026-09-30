@@ -24,6 +24,7 @@ Options:
       --input-location location
                             Timezone for inputs without an explicit timezone (default UTC)
   -g, --grep regexp         Replace strings that match the regular expression
+  -G, --replace string      Replace timestamps matching a named input format
       --strict              Stop at the first invalid timestamp
   -q, --quiet               Suppress invalid timestamp diagnostics
 
@@ -56,6 +57,10 @@ Format Examples:
 
 `timeconv` accepts timestamp arguments as well as standard input. Positional
 arguments are timestamp values, not file names.
+
+Input format detection is automatic by default. It can also be requested
+explicitly with `--in auto`; automatic parsing and `--replace` use the same
+named-format definitions.
 
 ```bash
 $ timeconv --in unix 1698292629.955
@@ -97,3 +102,16 @@ $ timeconv --in datetime --input-location Asia/Tokyo --location UTC '2023-11-01 
 Malformed timestamps are reported with their line number and processing
 continues by default. Use `--strict` to stop at the first error, or `--quiet` to
 suppress these diagnostics.
+
+Use `--replace` to find and convert timestamps embedded in other text. The
+named format also acts as the input format, so `-G unix-milli` is equivalent to
+selecting Unix millisecond timestamps and parsing them with `--in unix-milli`.
+
+```bash
+$ echo 'started=1698292629955 finished=1698292630057' | timeconv -G unix-milli --location UTC --out rfc3339nano
+started=2023-10-26T03:57:09.955Z finished=2023-10-26T03:57:10.057Z
+```
+
+`--replace` supports the named formats listed above. It cannot be combined with
+`--grep`. If `--in` is also specified, it must name the same format. For an
+arbitrary Go layout, continue to use `--grep REGEXP --in LAYOUT`.

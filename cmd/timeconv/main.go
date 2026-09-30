@@ -17,12 +17,16 @@ const maxScanTokenSize = 1024 * 1024
 
 type options struct {
 	in, out       string
+	replace       string
 	now           bool
 	add, sub      time.Duration
 	loc, inLoc    locationValue
 	re            regexpValue
 	strict, quiet bool
 	inputs        []string
+	inputSet      bool
+	grepSet       bool
+	replaceSet    bool
 }
 
 func parseFlags() *options {
@@ -40,6 +44,7 @@ func parseFlags() *options {
 	_ = pflag.CommandLine.MarkHidden("loc")
 	pflag.Var(&opts.inLoc, "input-location", "Timezone for inputs without an explicit timezone")
 	pflag.VarP(&opts.re, "grep", "g", "Replace strings that match the regular expression")
+	pflag.StringVarP(&opts.replace, "replace", "G", "", "Replace timestamps matching a named input format")
 	pflag.BoolVar(&opts.strict, "strict", false, "Stop at the first invalid timestamp")
 	pflag.BoolVarP(&opts.quiet, "quiet", "q", false, "Suppress invalid timestamp diagnostics")
 	pflag.CommandLine.SortFlags = false
@@ -54,7 +59,29 @@ func parseFlags() *options {
 	}
 	pflag.Parse()
 	opts.inputs = pflag.Args()
+	opts.inputSet = pflag.CommandLine.Changed("in")
+	opts.grepSet = pflag.CommandLine.Changed("grep")
+	opts.replaceSet = pflag.CommandLine.Changed("replace")
 	return &opts
+}
+
+func validateOptions(opts *options) error {
+	if opts.grepSet && opts.replaceSet {
+		return fmt.Errorf("--grep and --replace cannot be used together")
+	}
+	if !opts.replaceSet {
+		return nil
+	}
+	format := strings.ToLower(opts.replace)
+	if _, err := timeconv.FindAllInLocation("", format, opts.inLoc.Location); err != nil {
+		return fmt.Errorf("unsupported replace format: %s", opts.replace)
+	}
+	if opts.inputSet && !strings.EqualFold(opts.in, format) {
+		return fmt.Errorf("--in %s conflicts with --replace %s", opts.in, opts.replace)
+	}
+	opts.replace = format
+	opts.in = format
+	return nil
 }
 
 func genScanner(args []string) *bufio.Scanner {
@@ -131,6 +158,9 @@ func reportError(err error, line string, lineNumber int, opts *options) error {
 
 func run() error {
 	opts := parseFlags()
+	if err := validateOptions(opts); err != nil {
+		return err
+	}
 	if opts.now {
 		fmt.Println(timeconv.Format(modifyTime(time.Now(), opts.loc, opts.add, opts.sub), opts.out))
 		return nil
@@ -140,6 +170,16 @@ func run() error {
 	for scanner.Scan() {
 		lineNumber++
 		line := scanner.Text()
+		if opts.replaceSet {
+			replaced, replaceErr := replaceNamedTimestamps(line, opts)
+			if replaceErr != nil {
+				if err := reportError(replaceErr, line, lineNumber, opts); err != nil {
+					return err
+				}
+			}
+			fmt.Println(replaced)
+			continue
+		}
 		if opts.re.Regexp == nil {
 			out, err := processTimeString(strings.TrimSpace(line), opts)
 			if err != nil {

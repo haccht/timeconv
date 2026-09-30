@@ -14,6 +14,7 @@ func TestParse(t *testing.T) {
 		{"Unix", "1698292629", "unix", time.Unix(1698292629, 0), false},
 		{"RFC3339", "2023-10-26T12:57:09+09:00", "rfc3339", time.Date(2023, 10, 26, 12, 57, 9, 0, time.FixedZone("", 9*60*60)), false},
 		{"Auto-detect Unix", "1698292629", "", time.Unix(1698292629, 0), false},
+		{"Explicit auto", "1698292629", "auto", time.Unix(1698292629, 0), false},
 		{"Auto-detect RFC3339", "2023-10-26T12:57:09Z", "", time.Date(2023, 10, 26, 12, 57, 9, 0, time.UTC), false},
 		{"Invalid", "invalid time", "", time.Time{}, true},
 	}
@@ -27,6 +28,62 @@ func TestParse(t *testing.T) {
 				t.Fatalf("Parse() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseAutoDetectsNamedFormats(t *testing.T) {
+	tests := []string{
+		"Mon Jan  2 15:04:05 2006",
+		"Mon Jan  2 15:04:05 UTC 2006",
+		"Mon Jan 02 15:04:05 +0000 2006",
+		"02 Jan 06 15:04 UTC",
+		"02 Jan 06 15:04 +0000",
+		"Monday, 02-Jan-06 15:04:05 UTC",
+		"Mon, 02 Jan 2006 15:04:05 UTC",
+		"Mon, 02 Jan 2006 15:04:05 +0000",
+		"2006-01-02T15:04:05Z",
+		"2006-01-02T15:04:05.123456789Z",
+		"3:04PM",
+		"Jan  2 15:04:05",
+		"Jan  2 15:04:05.123",
+		"Jan  2 15:04:05.123456",
+		"Jan  2 15:04:05.123456789",
+		"2006-01-02 15:04:05",
+		"2006-01-02",
+		"15:04:05",
+	}
+	for _, input := range tests {
+		t.Run(input, func(t *testing.T) {
+			if _, err := Parse(input, "auto"); err != nil {
+				t.Fatalf("Parse(%q, auto) returned error: %v", input, err)
+			}
+		})
+	}
+}
+
+func TestFindAllInLocation(t *testing.T) {
+	input := "a=1698292629955 b=1698292630057"
+	matches, err := FindAllInLocation(input, "UNIX-MILLI", time.UTC)
+	if err != nil {
+		t.Fatalf("FindAllInLocation returned error: %v", err)
+	}
+	if len(matches) != 2 {
+		t.Fatalf("match count = %d, want 2", len(matches))
+	}
+	for i, want := range []string{"1698292629955", "1698292630057"} {
+		if got := input[matches[i].Start:matches[i].End]; got != want {
+			t.Fatalf("match %d = %q, want %q", i, got, want)
+		}
+	}
+}
+
+func TestFindAllInLocationRejectsPartialEpoch(t *testing.T) {
+	matches, err := FindAllInLocation("id=1698292629955123", "unix-milli", time.UTC)
+	if err != nil {
+		t.Fatalf("FindAllInLocation returned error: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("match count = %d, want 0", len(matches))
 	}
 }
 
