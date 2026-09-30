@@ -1,4 +1,4 @@
-module github.com/haccht/timeconv/cmd/timeconv
+module github.com/haccht/timeconv
 
 go 1.21.3
 
