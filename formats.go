@@ -68,6 +68,23 @@ var formatsByName = func() map[string]*formatDefinition {
 	return definitions
 }()
 
+var (
+	yearFirstFormats  = definitionsByName("rfc3339nano", "rfc3339", "datetime", "dateonly")
+	digitFirstFormats = definitionsByName("rfc822z", "rfc822", "timeonly", "kitchen")
+	textFirstFormats  = definitionsByName(
+		"ansic", "unixdate", "rubydate", "rfc850", "rfc1123z", "rfc1123",
+		"stampnano", "stampmicro", "stampmilli", "stamp",
+	)
+)
+
+func definitionsByName(names ...string) []*formatDefinition {
+	definitions := make([]*formatDefinition, len(names))
+	for i, name := range names {
+		definitions[i] = formatsByName[name]
+	}
+	return definitions
+}
+
 // Match describes a timestamp embedded in a larger string. Start and End are
 // byte offsets into the original string.
 type Match struct {
@@ -107,7 +124,21 @@ func FindAllInLocation(value, format string, loc *time.Location) ([]Match, error
 }
 
 func detect(value string, loc *time.Location) (time.Time, error) {
-	for _, definition := range formatDefinitions {
+	if definition := detectEpochFormat(value); definition != nil {
+		return parseDefinition(value, definition, loc)
+	}
+
+	var candidates []*formatDefinition
+	switch {
+	case len(value) >= 5 && allDigits(value[:4]) && value[4] == '-':
+		candidates = yearFirstFormats
+	case len(value) > 0 && value[0] >= '0' && value[0] <= '9':
+		candidates = digitFirstFormats
+	case len(value) > 0 && (value[0] >= 'A' && value[0] <= 'Z' || value[0] >= 'a' && value[0] <= 'z'):
+		candidates = textFirstFormats
+	}
+
+	for _, definition := range candidates {
 		index := definition.pattern.FindStringIndex(value)
 		if index == nil || index[0] != 0 || index[1] != len(value) {
 			continue
@@ -117,6 +148,43 @@ func detect(value string, loc *time.Location) (time.Time, error) {
 		}
 	}
 	return time.Time{}, fmt.Errorf("unknown format: %s", value)
+}
+
+func detectEpochFormat(value string) *formatDefinition {
+	unsigned := strings.TrimPrefix(strings.TrimPrefix(value, "+"), "-")
+	integer := unsigned
+	if dot := strings.IndexByte(unsigned, '.'); dot >= 0 {
+		integer = unsigned[:dot]
+		fraction := unsigned[dot+1:]
+		if fraction == "" || strings.ContainsRune(fraction, '.') || !allDigits(fraction) {
+			return nil
+		}
+	}
+	if !allDigits(integer) {
+		return nil
+	}
+	switch len(integer) {
+	case 9, 10:
+		return formatsByName["unix"]
+	case 12, 13:
+		return formatsByName["unix-milli"]
+	case 15, 16:
+		return formatsByName["unix-micro"]
+	default:
+		return nil
+	}
+}
+
+func allDigits(value string) bool {
+	if value == "" {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		if value[i] < '0' || value[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func parseDefinition(value string, definition *formatDefinition, loc *time.Location) (time.Time, error) {

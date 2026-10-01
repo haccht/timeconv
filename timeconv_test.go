@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+var benchmarkTime time.Time
+
 func TestParse(t *testing.T) {
 	tests := []struct {
 		name, input, format string
@@ -140,6 +142,26 @@ func TestParseInLocation(t *testing.T) {
 			}
 			if !got.Equal(tt.want) {
 				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func BenchmarkParseAuto(b *testing.B) {
+	tests := map[string]string{
+		"Unix":        "1698292629.955123",
+		"UnixMilli":   "1698292629955.123",
+		"UnixMicro":   "1698292629955123",
+		"RFC3339Nano": "2026-10-01T12:34:56.123456789+09:00",
+		"DateTime":    "2026-10-01 12:34:56",
+		"Stamp":       "Oct  1 12:34:56",
+		"Invalid":     "not a timestamp",
+	}
+	for name, input := range tests {
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				benchmarkTime, _ = Parse(input, "auto")
 			}
 		})
 	}
