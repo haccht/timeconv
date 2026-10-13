@@ -15,18 +15,20 @@ Usage:
   timeconv [Options] [time...]
 
 Options:
-  -i, --in string           Input time format (default: auto)
-  -o, --out string          Output time format (default "rfc3339")
-  -n, --now                 Load current time as input
-  -a, --add duration        Append time duration (ex. 5m, 1.5h, 1h30m)
-  -s, --sub duration        Subtract time duration (ex. 5m, 1.5h, 1h30m)
-  -l, --location location   Output timezone location (e.g., UTC, Asia/Tokyo) (default Local)
-      --input-location location
-                            Timezone for inputs without an explicit timezone (default UTC)
-  -g, --grep regexp         Replace strings that match the regular expression
-  -G, --replace string      Replace timestamps matching a named input format
-      --strict              Stop at the first invalid timestamp
-  -q, --quiet               Suppress invalid timestamp diagnostics
+  -i, --in string                 Input time format (default: auto)
+  -o, --out string                Output time format (default "rfc3339")
+  -a, --add duration              Append time duration (ex. 5m, 1.5h, 1h30m)
+  -s, --sub duration              Subtract time duration (ex. 5m, 1.5h, 1h30m)
+  -l, --location location         Output timezone location (e.g., UTC, Asia/Tokyo, +05:30) (default Local)
+      --input-location location   Timezone for inputs without an explicit timezone (e.g., Asia/Tokyo, +09:00) (default UTC)
+  -g, --grep regexp               Replace strings that match the regular expression
+  -G, --replace string            Replace timestamps matching a named input format
+      --strict                    Stop at the first invalid timestamp
+  -q, --quiet                     Suppress invalid timestamp diagnostics
+
+Timezone Examples:
+  timeconv now --location +05:30
+  timeconv --input-location +09:00 --location UTC '2026-10-13 09:00:00'
 
 Format Examples:
   ANSIC       "Mon Jan _2 15:04:05 2006"
@@ -57,6 +59,14 @@ Format Examples:
 
 `timeconv` accepts timestamp arguments as well as standard input. Positional
 arguments are timestamp values, not file names.
+
+Use `now` to load the current time.
+
+```bash
+timeconv now
+timeconv now --out unix
+timeconv now --sub 24h
+```
 
 Input format detection is automatic by default. It can also be requested
 explicitly with `--in auto`; automatic parsing and `--replace` use the same
@@ -97,6 +107,18 @@ should be interpreted. `--location` independently controls the output timezone.
 ```bash
 $ timeconv --in datetime --input-location Asia/Tokyo --location UTC '2023-11-01 18:00:00'
 2023-11-01T09:00:00Z
+```
+
+Both timezone flags also accept fixed numeric offsets in the signed `±HH:MM`
+format. Fixed offsets do not apply daylight saving time or historical timezone rules;
+the zone name is the supplied offset string.
+An explicit timezone or offset in the input takes precedence over
+
+```bash
+timeconv now --location +05:30
+
+$ timeconv --input-location +09:00 --location UTC '2026-10-13 09:00:00'
+2026-10-13T00:00:00Z
 ```
 
 Malformed timestamps are reported with their line number and processing

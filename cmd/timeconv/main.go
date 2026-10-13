@@ -18,7 +18,6 @@ const maxScanTokenSize = 1024 * 1024
 type options struct {
 	in, out       string
 	replace       string
-	now           bool
 	add, sub      time.Duration
 	loc, inLoc    locationValue
 	re            regexpValue
@@ -31,18 +30,18 @@ type options struct {
 
 func parseFlags() *options {
 	var opts options
+	pflag.CommandLine.Init(os.Args[0], pflag.ContinueOnError)
 	opts.loc.Location = time.Local
 	opts.inLoc.Location = time.UTC
 	pflag.StringVarP(&opts.in, "in", "i", "", "Input time format (default: auto)")
 	pflag.StringVarP(&opts.out, "out", "o", "rfc3339", "Output time format")
-	pflag.BoolVarP(&opts.now, "now", "n", false, "Load current time as input")
 	pflag.DurationVarP(&opts.add, "add", "a", 0, "Append time duration (ex. 5m, 1.5h, 1h30m)")
 	pflag.DurationVarP(&opts.sub, "sub", "s", 0, "Subtract time duration (ex. 5m, 1.5h, 1h30m)")
-	pflag.VarP(&opts.loc, "location", "l", "Output timezone location (e.g., UTC, Asia/Tokyo)")
+	pflag.VarP(&opts.loc, "location", "l", "Output timezone location (e.g., UTC, Asia/Tokyo, +05:30)")
 	pflag.Var(&opts.loc, "loc", "Alias for --location")
 	_ = pflag.CommandLine.MarkDeprecated("loc", "use --location instead")
 	_ = pflag.CommandLine.MarkHidden("loc")
-	pflag.Var(&opts.inLoc, "input-location", "Timezone for inputs without an explicit timezone")
+	pflag.Var(&opts.inLoc, "input-location", "Timezone for inputs without an explicit timezone (e.g., Asia/Tokyo, +09:00)")
 	pflag.VarP(&opts.re, "grep", "g", "Replace strings that match the regular expression")
 	pflag.StringVarP(&opts.replace, "replace", "G", "", "Replace timestamps matching a named input format")
 	pflag.BoolVar(&opts.strict, "strict", false, "Stop at the first invalid timestamp")
@@ -53,11 +52,19 @@ func parseFlags() *options {
 		fmt.Fprintf(os.Stderr, "  %s [Options] [time...]\n\n", filepath.Base(os.Args[0]))
 		fmt.Fprintln(os.Stderr, "Options:")
 		fmt.Fprintf(os.Stderr, "%s\n", pflag.CommandLine.FlagUsages())
+		fmt.Fprintln(os.Stderr, "Timezone Examples:")
+		fmt.Fprintf(os.Stderr, "  %s now --location +05:30\n", filepath.Base(os.Args[0]))
+		fmt.Fprintf(os.Stderr, "  %s --input-location +09:00 --location UTC '2026-10-13 09:00:00'\n\n", filepath.Base(os.Args[0]))
 		fmt.Fprintln(os.Stderr, "Format Examples:")
 		fmt.Fprintf(os.Stderr, "%s\n", timeconv.LayoutExamples)
-		os.Exit(0)
 	}
-	pflag.Parse()
+	if err := pflag.CommandLine.Parse(os.Args[1:]); err != nil {
+		if err == pflag.ErrHelp {
+			os.Exit(0)
+		}
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
 	opts.inputs = pflag.Args()
 	opts.inputSet = pflag.CommandLine.Changed("in")
 	opts.grepSet = pflag.CommandLine.Changed("grep")
@@ -112,6 +119,28 @@ func (lv *locationValue) String() string {
 	return lv.Location.String()
 }
 func (lv *locationValue) Set(value string) error {
+	if strings.HasPrefix(value, "+") || strings.HasPrefix(value, "-") {
+		invalid := fmt.Errorf("invalid timezone offset %q: expected ±HH:MM (hours 00–23, minutes 00–59)", value)
+		if len(value) != 6 || value[3] != ':' {
+			return invalid
+		}
+		for _, i := range []int{1, 2, 4, 5} {
+			if value[i] < '0' || value[i] > '9' {
+				return invalid
+			}
+		}
+		hours := int(value[1]-'0')*10 + int(value[2]-'0')
+		minutes := int(value[4]-'0')*10 + int(value[5]-'0')
+		if hours > 23 || minutes > 59 {
+			return invalid
+		}
+		offset := (hours*60 + minutes) * 60
+		if value[0] == '-' {
+			offset = -offset
+		}
+		lv.Location = time.FixedZone(value, offset)
+		return nil
+	}
 	loc, err := time.LoadLocation(value)
 	if err == nil {
 		lv.Location = loc
@@ -161,10 +190,7 @@ func run() error {
 	if err := validateOptions(opts); err != nil {
 		return err
 	}
-	if opts.now {
-		fmt.Println(timeconv.Format(modifyTime(time.Now(), opts.loc, opts.add, opts.sub), opts.out))
-		return nil
-	}
+	now := time.Now()
 	scanner := genScanner(opts.inputs)
 	lineNumber := 0
 	for scanner.Scan() {
@@ -181,7 +207,12 @@ func run() error {
 			continue
 		}
 		if opts.re.Regexp == nil {
-			out, err := processTimeString(strings.TrimSpace(line), opts)
+			value := strings.TrimSpace(line)
+			if strings.EqualFold(value, "now") {
+				fmt.Println(timeconv.Format(modifyTime(now, opts.loc, opts.add, opts.sub), opts.out))
+				continue
+			}
+			out, err := processTimeString(value, opts)
 			if err != nil {
 				if err := reportError(err, line, lineNumber, opts); err != nil {
 					return err
