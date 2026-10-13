@@ -19,7 +19,7 @@ Options:
   -o, --out string          Output time format (default "rfc3339")
   -n, --now                 Load current time as input
   -a, --add duration        Append time duration (ex. 5m, 1.5h, 1h30m)
-  -s, --sub duration        Substruct time duration (ex. 5m, 1.5h, 1h30m)
+  -s, --sub duration        Subtract time duration (ex. 5m, 1.5h, 1h30m)
   -l, --location location   Output timezone location (e.g., UTC, Asia/Tokyo) (default Local)
       --input-location location
                             Timezone for inputs without an explicit timezone (default UTC)

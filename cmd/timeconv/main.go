@@ -37,7 +37,7 @@ func parseFlags() *options {
 	pflag.StringVarP(&opts.out, "out", "o", "rfc3339", "Output time format")
 	pflag.BoolVarP(&opts.now, "now", "n", false, "Load current time as input")
 	pflag.DurationVarP(&opts.add, "add", "a", 0, "Append time duration (ex. 5m, 1.5h, 1h30m)")
-	pflag.DurationVarP(&opts.sub, "sub", "s", 0, "Substruct time duration (ex. 5m, 1.5h, 1h30m)")
+	pflag.DurationVarP(&opts.sub, "sub", "s", 0, "Subtract time duration (ex. 5m, 1.5h, 1h30m)")
 	pflag.VarP(&opts.loc, "location", "l", "Output timezone location (e.g., UTC, Asia/Tokyo)")
 	pflag.Var(&opts.loc, "loc", "Alias for --location")
 	_ = pflag.CommandLine.MarkDeprecated("loc", "use --location instead")
