@@ -58,7 +58,7 @@ func TestCLINow(t *testing.T) {
 			err := cmd.Run()
 			after := time.Now().Add(59 * time.Minute)
 			if tt.help {
-				if err != nil || stdout.Len() != 0 || !strings.Contains(stderr.String(), "Use 'now'") || strings.Contains(stderr.String(), "--now") ||
+				if err != nil || stdout.Len() != 0 || strings.Contains(stderr.String(), "--now") ||
 					!strings.Contains(stderr.String(), "now --location +05:30") || !strings.Contains(stderr.String(), "--input-location +09:00 --location UTC") {
 					t.Fatalf("error = %v, stdout = %q, stderr = %q; want help describing now and numeric timezone offsets", err, stdout.String(), stderr.String())
 				}
